@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.agent-tmp/
+
+# Downloaded PDFs (don't commit scraped output)
+downloads/
+*.pdf
+!logo/*.png
+
+# OS junk
+.DS_Store
+._*
