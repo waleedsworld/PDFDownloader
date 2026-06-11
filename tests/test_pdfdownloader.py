@@ -41,6 +41,48 @@ def test_find_pdf_links_honours_base_tag():
     assert links == ["https://cdn.test/files/doc.pdf"]
 
 
+def test_find_pdf_links_finds_embedded_viewers():
+    html = """
+    <a href="linked.pdf">a</a>
+    <iframe src="viewer.pdf"></iframe>
+    <embed src="/abs/embedded.pdf" type="application/pdf">
+    <object data="obj.pdf"></object>
+    <iframe src="linked.pdf"></iframe>
+    """
+    links = pd.find_pdf_links("https://site.test/course/", html)
+    assert links == [
+        "https://site.test/course/linked.pdf",
+        "https://site.test/course/viewer.pdf",
+        "https://site.test/abs/embedded.pdf",
+        "https://site.test/course/obj.pdf",
+    ]
+
+
+def test_filter_links_noop_without_patterns():
+    links = ["https://x.com/a.pdf", "https://x.com/b.pdf"]
+    assert pd.filter_links(links) == links
+
+
+def test_filter_links_include_is_case_insensitive():
+    links = [
+        "https://x.com/Week3-notes.pdf",
+        "https://x.com/week5-notes.pdf",
+        "https://x.com/syllabus.pdf",
+    ]
+    assert pd.filter_links(links, include="week3") == [
+        "https://x.com/Week3-notes.pdf",
+    ]
+
+
+def test_filter_links_exclude_wins_over_include():
+    links = [
+        "https://x.com/hw1.pdf",
+        "https://x.com/hw1-solution.pdf",
+    ]
+    result = pd.filter_links(links, include="hw1", exclude="solution")
+    assert result == ["https://x.com/hw1.pdf"]
+
+
 def test_filename_from_url():
     assert pd.filename_from_url("https://x.com/a/b/report.pdf") == "report.pdf"
     assert pd.filename_from_url("https://x.com/f.pdf?v=2") == "f.pdf"
