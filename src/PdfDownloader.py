@@ -15,6 +15,9 @@ Usage examples
 
     # Choose an output folder and just list what it *would* grab
     python3 PdfDownloader.py https://example.edu/notes -o ./downloads --dry-run
+
+    # Interactive terminal UI (needs `pip install rich`)
+    python3 PdfDownloader.py --tui
 """
 
 from __future__ import annotations
@@ -177,6 +180,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="List the PDFs that would be downloaded, but don't download them.",
     )
     parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Launch the interactive terminal UI (requires the 'rich' package).",
+    )
+    parser.add_argument(
         "--user-agent",
         default=DEFAULT_UA,
         help="Custom User-Agent header to send.",
@@ -186,6 +194,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+
+    if args.tui:
+        from tui import run_tui
+
+        return run_tui(args.url, args.output, args.user_agent)
+
     url = args.url or input("Enter link: ").strip()
     if not url:
         print("No URL provided. Bye!", file=sys.stderr)
