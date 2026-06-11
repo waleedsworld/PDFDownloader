@@ -28,9 +28,13 @@ folder of your choosing. No browser extensions, no clicking, no drama.
 ## Features
 
 - **One command, many PDFs** — scrapes every `.pdf` link on a page in a single pass.
+- **Finds embedded PDFs too** — not just `<a href>` links, but PDFs served through
+  `<iframe>`, `<embed>`, and `<object>` viewers get picked up as well.
 - **Smart link resolution** — relative links, nested paths, and `<base>` tags all
   resolve to correct absolute URLs. Query strings (`report.pdf?v=2`) are handled too.
 - **No duplicates** — the same file linked five times is downloaded once.
+- **Filter with regex** — `--include` / `--exclude` narrow a noisy page down to
+  exactly the files you want, and `--limit` caps how many you grab.
 - **`--dry-run` mode** — preview exactly what *would* be grabbed before committing.
 - **Never clobbers** — if `notes.pdf` already exists, the next one becomes
   `notes (1).pdf`.
@@ -92,6 +96,13 @@ python3 src/PdfDownloader.py https://example.edu/notes -o ./downloads
 python3 src/PdfDownloader.py https://example.edu/notes --dry-run
 ```
 
+**Filter a noisy page** (only week-3 handouts, skip solutions, cap at five):
+
+```bash
+python3 src/PdfDownloader.py https://example.edu/notes \
+    --include 'week-?3' --exclude solution --limit 5
+```
+
 ### All the options
 
 | Flag                 | What it does                                              |
@@ -99,6 +110,9 @@ python3 src/PdfDownloader.py https://example.edu/notes --dry-run
 | `url`                | The page to scrape (optional — prompted if omitted).     |
 | `-o`, `--output DIR` | Folder to save PDFs into. Default: current directory.    |
 | `--dry-run`          | List the PDFs that would be downloaded, but don't fetch. |
+| `--include REGEX`    | Keep only PDFs whose URL matches this (case-insensitive) regex. |
+| `--exclude REGEX`    | Drop PDFs whose URL matches this (case-insensitive) regex. |
+| `--limit N`          | Download at most N PDFs (keeps the first N found).       |
 | `--user-agent UA`    | Send a custom `User-Agent` header.                       |
 | `-h`, `--help`       | Show the built-in help.                                  |
 
@@ -131,12 +145,14 @@ python3 -m pytest tests/ -q
 ## How it works (the 30-second version)
 
 1. **Fetch** the page HTML with `requests` (sending a polite User-Agent).
-2. **Parse** it with BeautifulSoup + lxml and walk every `<a href>`.
+2. **Parse** it with BeautifulSoup + lxml and walk every PDF-bearing tag —
+   `<a href>` plus the `<iframe>`, `<embed>`, and `<object>` embeds.
 3. **Filter** to links whose path ends in `.pdf`, resolving each to an absolute
    URL against the page (or its `<base>` tag) and de-duplicating as it goes.
+   Optional `--include` / `--exclude` regexes and a `--limit` trim the list.
 4. **Stream** each PDF to disk, picking a non-clobbering filename.
 
-Four small, well-named functions — easy to read, easy to extend.
+A handful of small, well-named functions — easy to read, easy to extend.
 
 ## Live demo
 
