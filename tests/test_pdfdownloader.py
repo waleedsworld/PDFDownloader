@@ -52,3 +52,18 @@ def test_unique_path_avoids_clobber(tmp_path):
     (tmp_path / "f.pdf").write_text("x")
     result = pd.unique_path(str(tmp_path), "f.pdf")
     assert result.endswith("f (1).pdf")
+
+
+import tui  # noqa: E402
+
+
+def test_tui_normalise_url_adds_scheme():
+    assert tui._normalise_url("example.edu/notes") == "https://example.edu/notes"
+    assert tui._normalise_url("  http://x.com  ") == "http://x.com"
+    assert tui._normalise_url("https://x.com/f") == "https://x.com/f"
+    assert tui._normalise_url("") == ""
+
+
+def test_tui_reuses_core_defaults():
+    # The TUI front-end must share the CLI's default User-Agent.
+    assert tui.core.DEFAULT_UA == pd.DEFAULT_UA
