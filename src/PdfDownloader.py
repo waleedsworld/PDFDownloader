@@ -15,12 +15,17 @@ Usage examples
 
     # Choose an output folder and just list what it *would* grab
     python3 PdfDownloader.py https://example.edu/notes -o ./downloads --dry-run
+
+    # Grab only week-3 handouts, skip solutions, and cap it at five files
+    python3 PdfDownloader.py https://example.edu/notes \
+        --include 'week-?3' --exclude solution --limit 5
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from urllib.parse import urljoin, urlparse, unquote
 
@@ -32,6 +37,15 @@ DEFAULT_UA = (
     "+https://github.com/waleedsworld/PDFDownloader)"
 )
 CHUNK_SIZE = 64 * 1024  # 64 KiB streaming chunks
+
+# Where PDFs can hide in a page: not just <a href>, but embedded viewers too.
+# Each entry is (tag_name, attribute_holding_the_url).
+PDF_SOURCE_TAGS = (
+    ("a", "href"),
+    ("iframe", "src"),
+    ("embed", "src"),
+    ("object", "data"),
+)
 
 
 def build_session(user_agent: str = DEFAULT_UA) -> requests.Session:
@@ -52,8 +66,13 @@ def is_pdf_link(href: str) -> bool:
 def find_pdf_links(page_url: str, html: str) -> list[str]:
     """Extract absolute, de-duplicated PDF URLs from a page's HTML.
 
+    We look everywhere a PDF is commonly surfaced — plain ``<a href>`` links as
+    well as embedded viewers (``<iframe>``, ``<embed>``, ``<object>``) — so
+    pages that inline a PDF viewer instead of linking to the file still work.
+
     Links are resolved against the page's own ``<base>`` tag when present,
-    otherwise against ``page_url`` — so relative links Just Work.
+    otherwise against ``page_url`` — so relative links Just Work. Results keep
+    their first-seen order across all source tags.
     """
     soup = BeautifulSoup(html, "lxml")
 
@@ -62,15 +81,42 @@ def find_pdf_links(page_url: str, html: str) -> list[str]:
 
     seen: set[str] = set()
     links: list[str] = []
-    for anchor in soup.find_all("a", href=True):
-        href = anchor["href"].strip()
-        if not is_pdf_link(href):
-            continue
-        absolute = urljoin(base_url, href)
-        if absolute not in seen:
-            seen.add(absolute)
-            links.append(absolute)
+    for tag_name, attr in PDF_SOURCE_TAGS:
+        for element in soup.find_all(tag_name, **{attr: True}):
+            href = element[attr].strip()
+            if not is_pdf_link(href):
+                continue
+            absolute = urljoin(base_url, href)
+            if absolute not in seen:
+                seen.add(absolute)
+                links.append(absolute)
     return links
+
+
+def filter_links(
+    links: list[str],
+    include: str | None = None,
+    exclude: str | None = None,
+) -> list[str]:
+    """Keep only the links whose URL matches ``include`` and misses ``exclude``.
+
+    Both arguments are case-insensitive regular expressions searched anywhere in
+    the URL (``re.search`` semantics). ``include`` is a whitelist — when given,
+    a URL must match it to survive. ``exclude`` is a blacklist — any URL that
+    matches it is dropped. ``exclude`` wins over ``include`` on a tie. Passing
+    neither returns ``links`` unchanged, preserving order in every case.
+    """
+    inc = re.compile(include, re.IGNORECASE) if include else None
+    exc = re.compile(exclude, re.IGNORECASE) if exclude else None
+
+    result: list[str] = []
+    for link in links:
+        if inc and not inc.search(link):
+            continue
+        if exc and exc.search(link):
+            continue
+        result.append(link)
+    return result
 
 
 def filename_from_url(url: str) -> str:
@@ -114,7 +160,15 @@ def fetch_page(session: requests.Session, url: str) -> str:
     return response.text
 
 
-def run(url: str, output_dir: str, dry_run: bool, user_agent: str) -> int:
+def run(
+    url: str,
+    output_dir: str,
+    dry_run: bool,
+    user_agent: str,
+    include: str | None = None,
+    exclude: str | None = None,
+    limit: int | None = None,
+) -> int:
     """Core workflow. Returns a process exit code (0 = success)."""
     session = build_session(user_agent)
 
@@ -125,6 +179,16 @@ def run(url: str, output_dir: str, dry_run: bool, user_agent: str) -> int:
         return 1
 
     links = find_pdf_links(url, html)
+
+    # Narrow the haul down: regex include/exclude first, then an optional cap.
+    filtered = filter_links(links, include, exclude)
+    if (include or exclude) and len(filtered) != len(links):
+        print(f"Filtered {len(links)} link(s) down to {len(filtered)}.")
+    links = filtered
+    if limit is not None and len(links) > limit:
+        print(f"Limiting to the first {limit} of {len(links)} link(s).")
+        links = links[:limit]
+
     if not links:
         print("No PDF links found on that page. Nothing to do.")
         return 0
@@ -177,6 +241,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="List the PDFs that would be downloaded, but don't download them.",
     )
     parser.add_argument(
+        "--include",
+        metavar="REGEX",
+        help="Only download PDFs whose URL matches this (case-insensitive) regex.",
+    )
+    parser.add_argument(
+        "--exclude",
+        metavar="REGEX",
+        help="Skip PDFs whose URL matches this (case-insensitive) regex.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        metavar="N",
+        help="Download at most N PDFs (keeps the first N found).",
+    )
+    parser.add_argument(
         "--user-agent",
         default=DEFAULT_UA,
         help="Custom User-Agent header to send.",
@@ -192,7 +272,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if not urlparse(url).scheme:
         url = "https://" + url
-    return run(url, args.output, args.dry_run, args.user_agent)
+    return run(
+        url,
+        args.output,
+        args.dry_run,
+        args.user_agent,
+        include=args.include,
+        exclude=args.exclude,
+        limit=args.limit,
+    )
 
 
 if __name__ == "__main__":
