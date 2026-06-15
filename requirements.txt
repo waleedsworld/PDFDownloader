@@ -1,3 +1,7 @@
 requests>=2.25
 beautifulsoup4>=4.9
 lxml>=4.5
+
+# Optional: only needed for the interactive TUI (--tui). The command-line
+# tool works without it.
+rich>=12.0

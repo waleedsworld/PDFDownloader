@@ -43,6 +43,8 @@ folder of your choosing. No browser extensions, no clicking, no drama.
 - **Friendly failures** — one broken link won't stop the batch; you get a clear
   report of what worked and what didn't.
 - **Scriptable** — pass the URL as an argument, or run it bare and get prompted.
+- **Interactive TUI** — prefer a guided experience? `--tui` gives you a `rich`
+  terminal UI with a review table and a live download progress bar.
 
 ## Requirements
 
@@ -103,6 +105,19 @@ python3 src/PdfDownloader.py https://example.edu/notes \
     --include 'week-?3' --exclude solution --limit 5
 ```
 
+**Interactive terminal UI** (a guided, `rich`-powered experience):
+
+```bash
+pip install rich          # one-time; the TUI's only extra dependency
+python3 src/PdfDownloader.py --tui
+```
+
+It walks you through entering a URL, reviews the PDF links in a table, then
+streams each file with a live progress bar. You can also pre-fill values —
+`python3 src/PdfDownloader.py --tui https://example.edu/notes -o ./downloads` —
+and edit them in the prompts. If `rich` isn't installed, the TUI prints a hint
+and the classic command-line mode keeps working as before.
+
 ### All the options
 
 | Flag                 | What it does                                              |
@@ -113,6 +128,7 @@ python3 src/PdfDownloader.py https://example.edu/notes \
 | `--include REGEX`    | Keep only PDFs whose URL matches this (case-insensitive) regex. |
 | `--exclude REGEX`    | Drop PDFs whose URL matches this (case-insensitive) regex. |
 | `--limit N`          | Download at most N PDFs (keeps the first N found).       |
+| `--tui`              | Launch the interactive terminal UI (needs `rich`).       |
 | `--user-agent UA`    | Send a custom `User-Agent` header.                       |
 | `-h`, `--help`       | Show the built-in help.                                  |
 
