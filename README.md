@@ -11,7 +11,13 @@
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/python-3.8%2B-blue">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
+  <img alt="Dependencies" src="https://img.shields.io/badge/deps-requests%20%C2%B7%20bs4%20%C2%B7%20lxml-8957e5">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-pytest-0a9edc">
   <img alt="Status" src="https://img.shields.io/badge/status-actively%20maintained-brightgreen">
+</p>
+
+<p align="center">
+  <img src="assets/demo.gif" width="680" alt="PDF Downloader scraping and downloading three PDFs from a course page">
 </p>
 
 ---
@@ -128,6 +134,34 @@ pip install pytest
 python3 -m pytest tests/ -q
 ```
 
+## Architecture
+
+The whole thing is one file of small, single-purpose functions — a straight
+pipeline from URL to files on disk. No classes, no global state, nothing to
+memorise.
+
+```
+  URL ─▶ fetch_page ─▶ find_pdf_links ─▶ download_file ─▶ ./output/*.pdf
+          │                 │                  │
+      requests         BeautifulSoup      streamed 64 KiB
+      + User-Agent      + lxml, <base>-     chunks, unique_path
+                        aware, de-duped     avoids clobbering
+```
+
+| Function          | Responsibility                                                        |
+| ----------------- | --------------------------------------------------------------------- |
+| `build_session`   | One `requests.Session` with a polite `User-Agent` for every request.  |
+| `fetch_page`      | GET the page HTML, raising on any non-2xx response.                   |
+| `find_pdf_links`  | Parse the HTML, resolve `<base>`/relative links, keep only `.pdf`, de-dupe. |
+| `is_pdf_link`     | Predicate that ignores query strings and fragments (`a.pdf?v=2` ✓).   |
+| `filename_from_url` | Derive a safe local name, URL-decoding and forcing a `.pdf` suffix. |
+| `unique_path`     | Never overwrite: `notes.pdf` → `notes (1).pdf` → `notes (2).pdf` …    |
+| `download_file`   | Stream one PDF to disk in 64 KiB chunks (RAM-friendly for big files). |
+| `run`             | Orchestrate the pipeline and report what worked and what didn't.      |
+
+The parsing functions are pure and network-free, which is exactly why the test
+suite can exercise them without touching the internet.
+
 ## How it works (the 30-second version)
 
 1. **Fetch** the page HTML with `requests` (sending a polite User-Agent).
@@ -135,12 +169,6 @@ python3 -m pytest tests/ -q
 3. **Filter** to links whose path ends in `.pdf`, resolving each to an absolute
    URL against the page (or its `<base>` tag) and de-duplicating as it goes.
 4. **Stream** each PDF to disk, picking a non-clobbering filename.
-
-Four small, well-named functions — easy to read, easy to extend.
-
-## Live demo
-
-Live demo — deploying soon.
 
 ## A note on being a good web citizen
 
